@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>VOX Analizador Legislativo</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, sans-serif; background: #f5f5f5; color: #1a1a1a; }
+  .app { max-width: 900px; margin: 0 auto; padding: 2rem 1rem; }
+  .header { display: flex; align-items: center; gap: 12px; margin-bottom: 2rem; }
+  .logo { width: 40px; height: 40px; background: #5CB85C; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 13px; }
+  h1 { font-size: 20px; font-weight: 600; }
+  h1 span { font-size: 13px; font-weight: 400; color: #666; display: block; margin-top: 2px; }
+  .card { background: white; border-radius: 12px; padding: 1.5rem; margin-bottom: 1rem; border: 1px solid #e5e5e5; }
+  label { font-size: 12px; font-weight: 600; color: #666; text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: 6px; }
+  input, textarea { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; font-family: inherit; color: #1a1a1a; background: white; }
+  input:focus, textarea:focus { outline: none; border-color: #5CB85C; }
+  input[type=password] { font-family: monospace; }
+  .row { display: flex; gap: 8px; }
+  .row input { flex: 1; }
+  button { padding: 10px 20px; background: #5CB85C; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; }
+  button:hover { background: #4cae4c; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  button.sec { background: white; color: #1a1a1a; border: 1px solid #ddd; }
+  button.sec:hover { background: #f5f5f5; }
+  .status { font-size: 13px; color: #666; margin-top: 8px; min-height: 18px; }
+  .status.ok { color: #5CB85C; }
+  .status.err { color: #e53e3e; }
+  .result-item { padding: 10px 12px; border: 1px solid #e5e5e5; border-radius: 8px; margin-bottom: 6px; cursor: pointer; }
+  .result-item:hover { border-color: #5CB85C; background: #f9fff9; }
+  .result-title { font-size: 13px; font-weight: 500; margin-bottom: 4px; line-height: 1.4; }
+  .result-meta { font-size: 12px; color: #888; }
+  .badge { display: inline-block; padding: 1px 6px; background: #e8f5e9; color: #2e7d32; border-radius: 4px; font-size: 11px; margin-right: 4px; }
+  .badge.derogada { background: #fce8e8; color: #c62828; }
+  .analisis { background: #f9f9f9; border: 1px solid #e5e5e5; border-radius: 8px; padding: 1.25rem; font-size: 14px; line-height: 1.8; white-space: pre-wrap; margin-top: 1rem; display: none; }
+  .tabs { display: flex; gap: 6px; margin-bottom: 1.5rem; }
+  .tab { padding: 8px 16px; border: 1px solid #ddd; border-radius: 8px; font-size: 13px; cursor: pointer; background: white; color: #666; }
+  .tab.active { background: #5CB85C; border-color: #5CB85C; color: white; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <div class="logo">VOX</div>
+    <h1>Analizador Legislativo <span>BOE + perspectiva programática VOX</span></h1>
+  </div>
+
+  <div class="card">
+    <label>API Key de Anthropic</label>
+    <input type="password" id="apiKey" placeholder="sk-ant-api03-..." />
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" id="tbtn-buscar" onclick="switchTab('buscar')">Buscar en el BOE</div>
+    <div class="tab" id="tbtn-analizar" onclick="switchTab('analizar')">Analizar ley</div>
+  </div>
+
+  <div id="panel-buscar" class="card">
+    <label>Buscar norma</label>
+    <div class="row" style="margin-bottom:0">
+      <input type="text" id="searchInput" placeholder="Ej: vivienda, arrendamientos, empleo..." />
+      <button onclick="buscar()">Buscar</button>
+    </div>
+    <div id="searchStatus" class="status"></div>
+    <div id="searchResults" style="margin-top:12px;"></div>
+  </div>
+
+  <div id="panel-analizar" class="card" style="display:none;">
+    <label>Texto de la ley</label>
+    <textarea id="textoLey" rows="10" placeholder="Carga una norma desde la búsqueda o pega el texto aquí..." style="margin-bottom:1rem;"></textarea>
+    <label>Pregunta o enfoque</label>
+    <textarea id="pregunta" rows="3" placeholder="Ej: ¿Qué artículos son obstáculos regulatorios desde la perspectiva de VOX?" style="margin-bottom:1rem;"></textarea>
+    <button id="btnAnalizar" onclick="analizar()" style="width:100%;">Analizar desde perspectiva VOX</button>
+    <div id="analizarStatus" class="status"></div>
+    <div id="analisisBox" class="analisis"></div>
+  </div>
+</div>
+
+<script>
+const PROXY = 'https://vox-legislativo-proxy-production.up.railway.app';
+
+function switchTab(tab) {
+  document.getElementById('panel-buscar').style.display = tab === 'buscar' ? 'block' : 'none';
+  document.getElementById('panel-analizar').style.display = tab === 'analizar' ? 'block' : 'none';
+  document.getElementById('tbtn-buscar').className = 'tab' + (tab === 'buscar' ? ' active' : '');
+  document.getElementById('tbtn-analizar').className = 'tab' + (tab === 'analizar' ? ' active' : '');
+}
+
+async function buscar() {
+  const q = document.getElementById('searchInput').value.trim();
+  const status = document.getElementById('searchStatus');
+  const results = document.getElementById('searchResults');
+  if (!q) return;
+  status.textContent = 'Buscando...';
+  status.className = 'status ok';
+  results.innerHTML = '';
+  try {
+    const res = await fetch(`${PROXY}/buscar?consulta=${encodeURIComponent(q)}`);
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+    const items = data.resultados || [];
+    status.textContent = items.length + ' resultados';
+    status.className = 'status';
+    if (!items.length) { results.innerHTML = '<p style="font-size:13px;color:#888;">Sin resultados.</p>'; return; }
+    results.innerHTML = items.map(item => `
+      <div class="result-item" onclick="cargarNorma('${item.identificador}', \`${(item.titulo||'').replace(/`/g,"'")}\`)">
+        <div class="result-title">${item.titulo}</div>
+        <div class="result-meta">
+          <span class="badge ${item.vigencia_agotada==='S'?'derogada':''}">${item.rango||''}</span>
+          ${item.fecha_publicacion||''} · ${item.identificador}
+          ${item.vigencia_agotada==='S'?' · Derogada':''}
+        </div>
+      </div>`).join('');
+  } catch(e) {
+    status.textContent = 'Error: ' + e.message;
+    status.className = 'status err';
+  }
+}
+
+async function cargarNorma(id, titulo) {
+  switchTab('analizar');
+  const status = document.getElementById('analizarStatus');
+  status.textContent = 'Cargando ' + titulo.substring(0,60) + '...';
+  status.className = 'status ok';
+  document.getElementById('textoLey').value = '';
+  document.getElementById('analisisBox').style.display = 'none';
+  try {
+    const res = await fetch(`${PROXY}/norma/${id}`);
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+    const meta = data.metadatos || {};
+    const cabecera = `NORMA: ${meta.titulo||titulo}\nRANGO: ${meta.rango||''}\nFECHA: ${meta.fecha_publicacion||''}\nID: ${id}\n\n---\n\n`;
+    document.getElementById('textoLey').value = cabecera + (data.texto||'');
+    document.getElementById('pregunta').value = 'Analiza esta norma desde la perspectiva de VOX: identifica los principales obstáculos regulatorios, interferencias en la libertad económica o incompatibilidades con el programa de VOX, y propón iniciativas legislativas alternativas concretas artículo por artículo.';
+    status.textContent = 'Norma cargada. Pulsa analizar cuando estés listo.';
+    status.className = 'status';
+  } catch(e) {
+    status.textContent = 'Error: ' + e.message;
+    status.className = 'status err';
+  }
+}
+
+async function analizar() {
+  const apiKey = document.getElementById('apiKey').value.trim();
+  const textoLey = document.getElementById('textoLey').value.trim();
+  const pregunta = document.getElementById('pregunta').value.trim();
+  const btn = document.getElementById('btnAnalizar');
+  const status = document.getElementById('analizarStatus');
+  const box = document.getElementById('analisisBox');
+  if (!apiKey) { status.textContent = 'Introduce tu API key.'; status.className = 'status err'; return; }
+  if (!textoLey) { status.textContent = 'Carga o pega el texto de una ley.'; status.className = 'status err'; return; }
+  if (!pregunta) { status.textContent = 'Introduce una pregunta.'; status.className = 'status err'; return; }
+  btn.disabled = true;
+  box.style.display = 'none';
+  status.textContent = 'Analizando con Claude...';
+  status.className = 'status ok';
+  try {
+    const res = await fetch(`${PROXY}/analizar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey },
+      body: JSON.stringify({ textoLey, pregunta })
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    box.textContent = data.analisis;
+    box.style.display = 'block';
+    status.textContent = 'Análisis completado.';
+    status.className = 'status';
+  } catch(e) {
+    status.textContent = 'Error: ' + e.message;
+    status.className = 'status err';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+document.getElementById('searchInput').addEventListener('keydown', e => { if (e.key==='Enter') buscar(); });
+</script>
+</body>
+</html>
