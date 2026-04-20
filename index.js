@@ -4,8 +4,11 @@ const cors = require('cors');
 const xml2js = require('xml2js');
 
 const app = express();
-app.use(cors());
-app.use(express.json());
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST'],
+  allowedHeaders: ['Content-Type', 'x-api-key']
+}));app.use(express.json());
 
 const BOE_API = 'https://www.boe.es/api/boe';
 
