@@ -1,53 +1,50 @@
 const express = require('express');
 const axios = require('axios');
 const cors = require('cors');
-const xml2js = require('xml2js');
 
 const app = express();
 app.use(cors({
   origin: '*',
   methods: ['GET', 'POST'],
   allowedHeaders: ['Content-Type', 'x-api-key']
-}));app.use(express.json());
+}));
+app.use(express.json());
 
-const BOE_API = 'https://www.boe.es/api/boe';
-
-// Buscar normas en el BOE
 app.get('/buscar', async (req, res) => {
   try {
     const { consulta } = req.query;
     if (!consulta) return res.status(400).json({ error: 'Falta el parámetro consulta' });
 
-    const response = await axios.get(`${BOE_API}/buscar`, {
-      params: { q: consulta, rows: 5 }
+    const response = await axios.get('https://boe.es/buscar/act.php', {
+      params: { 
+        lang: 'es',
+        q: consulta,
+        b: 'A'
+      },
+      headers: {
+        'Accept': 'application/json',
+        'User-Agent': 'Mozilla/5.0'
+      }
     });
 
-    const parser = new xml2js.Parser({ explicitArray: false });
-    const resultado = await parser.parseStringPromise(response.data);
-    
-    res.json(resultado);
+    res.json({ ok: true, data: response.data.substring(0, 3000) });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: error.message, status: error.response?.status });
   }
 });
 
-// Obtener texto completo de una norma por ID
 app.get('/norma/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    
-    const response = await axios.get(`${BOE_API}/id/${id}`);
-    
-    const parser = new xml2js.Parser({ explicitArray: false });
-    const resultado = await parser.parseStringPromise(response.data);
-    
-    res.json(resultado);
+    const response = await axios.get(`https://www.boe.es/diario/boe/xml.php?id=${id}`, {
+      headers: { 'User-Agent': 'Mozilla/5.0' }
+    });
+    res.json({ ok: true, data: response.data.substring(0, 8000) });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// Analizar una norma con Claude desde la perspectiva de VOX
 app.post('/analizar', async (req, res) => {
   try {
     const { textoLey, pregunta } = req.body;
@@ -94,9 +91,7 @@ legislativa concreta: qué artículo modificar, cómo redactarlo y qué objetivo
       }
     );
 
-    res.json({ 
-      analisis: response.data.content[0].text 
-    });
+    res.json({ analisis: response.data.content[0].text });
 
   } catch (error) {
     res.status(500).json({ error: error.message });
