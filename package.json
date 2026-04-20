@@ -1,0 +1,14 @@
+{
+  "name": "vox-legislativo-proxy",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "axios": "^1.6.0",
+    "cors": "^2.8.5",
+    "xml2js": "^0.6.2"
+  }
+}
