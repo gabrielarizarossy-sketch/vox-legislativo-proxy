@@ -1,14 +1,17 @@
 const express = require('express');
 const axios = require('axios');
-const cors = require('cors');
 const xml2js = require('xml2js');
 
 const app = express();
-app.use(cors({
-  origin: '*',
-  methods: ['GET', 'POST'],
-  allowedHeaders: ['Content-Type', 'x-api-key']
-}));
+
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, x-api-key');
+  if (req.method === 'OPTIONS') return res.sendStatus(200);
+  next();
+});
+
 app.use(express.json());
 
 const BOE_BASE = 'https://boe.es/datosabiertos/api/legislacion-consolidada';
@@ -33,9 +36,7 @@ app.get('/buscar', async (req, res) => {
       }
     });
 
-    const data = response.data;
-    const items = data?.data || [];
-
+    const items = response.data?.data || [];
     const resultados = (Array.isArray(items) ? items : []).map(item => ({
       identificador: item.identificador,
       titulo: item.titulo,
@@ -49,10 +50,7 @@ app.get('/buscar', async (req, res) => {
     res.json({ ok: true, resultados });
 
   } catch (error) {
-    res.status(500).json({
-      error: error.message,
-      status: error.response?.status
-    });
+    res.status(500).json({ error: error.message, status: error.response?.status });
   }
 });
 
