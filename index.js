@@ -229,7 +229,7 @@ Analiza artículo por artículo aplicando la regla de prioridad temporal.`;
     const response = await axios.post(
       'https://api.anthropic.com/v1/messages',
       {
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-sonnet-4-5',
         max_tokens: 4000,
         system: systemPrompt,
         messages: [{ role: 'user', content: userContent }]
